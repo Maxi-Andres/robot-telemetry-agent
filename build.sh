@@ -21,4 +21,3 @@ LIBS=("$SDK/lib/$ARCH/libunitree_sdk2.a" -L"$SDK/thirdparty/lib/$ARCH" -lddscxx 
 # Telemetry: read-only, subscribes and nothing else.
 g++ -O2 -std=c++17 src/telemetry_reader.cpp -o telemetry_reader "${INCS[@]}" "${LIBS[@]}"
 echo "built ./telemetry_reader ($ARCH)"
-

@@ -20,12 +20,12 @@ Run it with --dry-run first: it prints the exact JSON it would send and sends no
 """
 import argparse
 import json
-import signal
 import os
+import signal
+import ssl
 import sys
 import time
 import urllib.request
-import ssl
 
 import rclpy
 from rclpy.node import Node
