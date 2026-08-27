@@ -22,7 +22,3 @@ LIBS=("$SDK/lib/$ARCH/libunitree_sdk2.a" -L"$SDK/thirdparty/lib/$ARCH" -lddscxx 
 g++ -O2 -std=c++17 src/telemetry_reader.cpp -o telemetry_reader "${INCS[@]}" "${LIBS[@]}"
 echo "built ./telemetry_reader ($ARCH)"
 
-# Command relay: the only binary here that can MOVE the robot. Safety (verb allowlist,
-# velocity clamp, dead-man switch) lives inside it, not in the HTTP layer above it.
-g++ -O2 -std=c++17 relay/command_sender.cpp -o command_sender "${INCS[@]}" "${LIBS[@]}"
-echo "built ./command_sender ($ARCH)"

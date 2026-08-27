@@ -242,7 +242,7 @@ int main() {
             iface.c_str(), g_robot.c_str(), g_period);
 
     // Binding CycloneDDS to the interface is not optional: Init(0, iface) alone does not
-    // make the SDK receive anything. Hard-won detail, same as robot-nvr-bridge.
+    // make the SDK receive anything. Hard-won detail, same as robot-video-pipeline.
     ChannelFactory::Instance()->Init(0, iface);
 
     ChannelSubscriberPtr<LowState> sub_low(
