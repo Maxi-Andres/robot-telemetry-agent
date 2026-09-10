@@ -1,5 +1,3 @@
 telemetry_reader
 *.o
 __pycache__/
-command_sender
-relay/relay.env

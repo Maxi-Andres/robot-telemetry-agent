@@ -1,7 +1,12 @@
-# robot-splunk-bridge
+# robot-telemetry-agent
 
 Telemetry agent that reads a Unitree robot's DDS state and posts curated events to Splunk
 over HTTPS. **It runs on the robot's own high-level computer**, not on a server.
+
+**Read-only.** It subscribes and nothing else. The remote command path — the only thing that
+can move the robot — lives in a separate repo, `robot-command-relay`, so that it is named
+for what it does and can be audited on its own. The two used to share this repo because they
+share a build recipe and a deploy target; they never shared code.
 
 ## Why on the robot
 
@@ -20,7 +25,7 @@ to be L2-adjacent to the robot's DDS — wherever the robot goes — is the robo
 So: **DDS short and local, HTTPS long and routed.** The agent extracts fields next to the
 robot and only HTTPS leaves it, which traverses NAT, Starlink and any VLAN.
 
-Full reasoning: `SplunkCode/RED-Y-DDS.md`. Plan: `SplunkCode/PLAN.md`.
+Full reasoning: `robot-splunk-docs/RED-Y-DDS.md`. Plan: `robot-splunk-docs/PLAN.md`.
 
 ## Shape
 
@@ -46,14 +51,14 @@ does not patch it) and the robot has internet, so nothing needs copying from a w
 ```bash
 ssh unitree@<robot-jetson>
 git clone https://github.com/unitreerobotics/unitree_sdk2.git ~/unitree_sdk2
-git clone <this-repo> ~/robot-splunk-bridge
-cd ~/robot-splunk-bridge && ./build.sh
+git clone <this-repo> ~/robot-telemetry-agent
+cd ~/robot-telemetry-agent && ./build.sh
 ```
 
 Updating later:
 
 ```bash
-git pull && ./build.sh && sudo systemctl restart robot-splunk-bridge
+git pull && ./build.sh && sudo systemctl restart robot-telemetry-agent
 ```
 
 `./build.sh` is **not** optional after a pull: the binary is gitignored, so a pull brings
@@ -62,7 +67,7 @@ new source without rebuilding it.
 The token lives in `~/.splunk_hec_token`, outside the repo — a pull never overwrites it and
 a push never leaks it.
 
-Step-by-step with success criteria for each stage: `SplunkCode/IMPLEMENTACION.md`, Etapa D.
+Step-by-step with success criteria for each stage: `robot-splunk-docs/IMPLEMENTACION.md`, Etapa D.
 
 ## Build
 
