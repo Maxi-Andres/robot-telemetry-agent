@@ -30,6 +30,9 @@ SELF_HEALTH_S = float(os.environ.get("SELF_HEALTH_S", "30"))
 HEC_URL = os.environ.get("HEC_URL", "")
 HEC_TOKEN = os.environ.get("HEC_TOKEN", "")
 SPOOL_DIR = os.environ.get("SPOOL_DIR", "/var/tmp/robot-splunk-spool")
+# Newest battery reading, for the relay to serve to the app. Empty disables it; the telemetry
+# pipeline works exactly the same either way. See snapshot_battery().
+BATTERY_FILE = os.environ.get("BATTERY_FILE", "/var/tmp/robot-battery.json")
 SPOOL_MB = float(os.environ.get("SPOOL_MB", "50"))
 DAILY_CAP = int(os.environ.get("DAILY_BYTE_CAP", str(150 * 1024 * 1024)))
 BATCH_N = int(os.environ.get("BATCH_N", "20"))
@@ -136,6 +139,54 @@ class Sender:
         return False
 
 
+def snapshot_battery(line):
+    """Keep the newest battery reading in a file the relay can serve.
+
+    WHY HERE. The battery already crosses this process on its way to Splunk, so the app can
+    have it without a second DDS subscriber, a second socket or a second service. The relay
+    reads this file and folds it into its own /health, the way it already folds in the video
+    publisher's — see `mjpeg_live()` there.
+
+    WHY A FILE and not a socket: this process must never gain a listening port. It runs on the
+    robot, it holds the HEC token, and its whole security story is that it only ever makes
+    OUTBOUND connections. A file that one local service reads keeps that true.
+
+    Written atomically (tmp + rename), so a reader can never see half a document.
+
+    NEVER RAISES. Shipping telemetry is the job; a full disk or a read-only /var must not be
+    able to stop it for the sake of a convenience field.
+    """
+    if not BATTERY_FILE:
+        return
+    try:
+        ev = json.loads(line)
+    except (ValueError, TypeError):
+        return
+    # Every level checked, not just the outer one: `{"event": "..."}` is valid JSON and made
+    # this raise AttributeError inside the shipping loop — caught by
+    # test_a_malformed_line_is_ignored_rather_than_raised, which is the whole point of it.
+    if not isinstance(ev, dict):
+        return
+    inner = ev.get("event")
+    if not isinstance(inner, dict):
+        return
+    bat = inner.get("battery")
+    if not isinstance(bat, dict):
+        return
+    try:
+        # `at` is OUR clock when the reading was taken, so a consumer can tell a live value
+        # from one frozen since the robot went quiet. A battery percentage that never changes
+        # looks perfectly healthy and is the easiest stale reading to miss.
+        doc = json.dumps({**bat, "at": round(time.time(), 3), "robot": ROBOT},
+                         separators=(",", ":"))
+        tmp = BATTERY_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(doc)
+        os.replace(tmp, BATTERY_FILE)
+    except OSError:
+        pass
+
+
 def main():
     if not (HEC_URL and HEC_TOKEN):
         sys.exit("HEC_URL and HEC_TOKEN are required")
@@ -201,6 +252,7 @@ def main():
                 return
             line = line.strip()
             if line:
+                snapshot_battery(line)
                 batch.append(line)
 
         now = time.time()
