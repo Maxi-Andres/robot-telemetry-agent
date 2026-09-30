@@ -1,4 +1,4 @@
-// telemetry_reader — Unitree Go2 DDS -> curated NDJSON on stdout.
+// go2_telemetry_reader — Unitree Go2 DDS -> curated NDJSON on stdout.
 //
 // Runs ON THE ROBOT (its high-level Jetson), which is the only machine guaranteed to be
 // L2-adjacent to the robot's DDS no matter what network the robot is on. Measured proof
@@ -13,18 +13,16 @@
 // same payload as rt/lowstate at 20 Hz instead of 500 Hz — same 1.18 KB message, 25x
 // less traffic (measured, see CENSO-GO2.md).
 //
-// Output is one HEC event envelope per line. Every value is numeric and every key is a
-// literal, so no JSON string escaping is needed anywhere in this file.
+// Output is one HEC event envelope per line (src/ndjson.hpp). The G1 has its own reader,
+// src/g1_telemetry_reader.cpp: different IDL (unitree_hg), 29 joints, separate BMS topic.
+
+#include "ndjson.hpp"
 
 #include <unitree/robot/channel/channel_subscriber.hpp>
 #include <unitree/idl/go2/LowState_.hpp>
 #include <unitree/idl/go2/SportModeState_.hpp>
 
 #include <atomic>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <chrono>
 #include <map>
 #include <mutex>
 #include <string>
@@ -47,63 +45,7 @@ static bool g_have_low = false, g_have_sport = false;
 static std::atomic<long> g_n_low{0}, g_n_sport{0};
 static std::atomic<double> g_last_low{0};
 
-static std::string g_robot, g_index;
 static double g_period, g_health_period, g_temp_warn, g_down_after;
-
-static double now_s() {
-    using namespace std::chrono;
-    return duration<double>(system_clock::now().time_since_epoch()).count();
-}
-
-static const char* env_s(const char* k, const char* d) {
-    const char* v = getenv(k);
-    return (v && *v) ? v : d;
-}
-static double env_d(const char* k, double d) {
-    const char* v = getenv(k);
-    return (v && *v) ? atof(v) : d;
-}
-
-// ---------- minimal JSON emission ----------
-
-// Trims trailing zeros so 0.1400 serialises as 0.14. Over 40 MB/day of events those
-// bytes are licence cost, not cosmetics.
-static std::string num(double v, int prec) {
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%.*f", prec, v);
-    std::string s(buf);
-    if (s.find('.') != std::string::npos) {
-        while (s.back() == '0') s.pop_back();
-        if (s.back() == '.') s.pop_back();
-    }
-    if (s == "-0") s = "0";
-    return s;
-}
-
-struct Obj {
-    std::string s;
-    bool first = true;
-    void key(const char* k) {
-        if (!first) s += ',';
-        first = false;
-        s += '"'; s += k; s += "\":";
-    }
-    void i(const char* k, long long v) { key(k); s += std::to_string(v); }
-    void f(const char* k, double v, int prec) { key(k); s += num(v, prec); }
-    void b(const char* k, bool v) { key(k); s += v ? "true" : "false"; }
-    void raw(const char* k, const std::string& v) { key(k); s += v; }
-};
-
-static void emit(const char* sourcetype, const std::string& body) {
-    Obj e;
-    e.f("time", now_s(), 3);
-    e.raw("sourcetype", std::string("\"") + sourcetype + "\"");
-    e.raw("host", "\"" + g_robot + "\"");
-    if (!g_index.empty()) e.raw("index", "\"" + g_index + "\"");
-    e.raw("event", body);
-    printf("{%s}\n", e.s.c_str());
-    fflush(stdout);
-}
 
 // ---------- event builders ----------
 

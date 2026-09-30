@@ -27,15 +27,22 @@ robot and only HTTPS leaves it, which traverses NAT, Starlink and any VLAN.
 
 Full reasoning: `robot-splunk-docs/RED-Y-DDS.md`. Plan: `robot-splunk-docs/PLAN.md`.
 
+
+## Go2 vs G1
+
+This repo serves both robots. Files prefixed `go2_` run only on the Go2, `g1_` (or under
+`host/g1/`) only on the G1, unprefixed ones on both; `ROBOT_MODEL` picks the variant. The
+full map — what runs where, per repo — is `robot-splunk-docs/QUE-CORRE-EN-CADA-ROBOT.md`.
+
 ## Shape
 
 ```
 rt/lf/lowstate ─┐
-                ├─▶ telemetry_reader (C++) ─NDJSON─▶ hec_shipper.py ─HTTPS─▶ Splunk HEC
+                ├─▶ go2_telemetry_reader (C++) ─NDJSON─▶ hec_shipper.py ─HTTPS─▶ Splunk HEC
 rt/lf/sport…   ─┘   curated fields, decimated        batch + disk spool
 ```
 
-- **`src/telemetry_reader.cpp`** — native Unitree SDK, no ROS2. Subscribes to the `/lf/*`
+- **`src/go2_telemetry_reader.cpp`** — native Unitree SDK, no ROS2. Subscribes to the `/lf/*`
   topics (20 Hz, same payload as the 500 Hz ones — 25x less traffic), decimates to one
   event set every `PERIOD`, emits one HEC envelope per line on stdout.
 - **`shipper/hec_shipper.py`** — stdlib only (the robot has Python 3.8). Batches, retries,
@@ -78,7 +85,7 @@ UNITREE_SDK2_DIR=~/unitree_sdk2 ./build.sh     # x86_64 or aarch64, same command
 ## Run
 
 ```bash
-./telemetry_reader                 # dry run: prints the JSON, sends nothing
+./go2_telemetry_reader             # dry run: prints the JSON, sends nothing (./g1_telemetry_reader on the G1)
 HEC_URL=https://<splunk>:8088/services/collector/event ./run.sh
 ```
 
@@ -97,6 +104,27 @@ list or shell history.
 | `DAILY_BYTE_CAP` | `150 MB` | Hard stop, resets at UTC midnight |
 | `SPOOL_MB` | `50` | Disk spool ceiling; oldest batch dropped when full |
 | `VERIFY_TLS` | `0` | `1` once Splunk has a real certificate |
+
+## The G1
+
+Same agent, second reader: **`src/g1_telemetry_reader.cpp`**, selected with
+`ROBOT_MODEL=g1` (`run.sh` picks the binary; everything after the pipe is shared). It runs on
+the G1's **PC2** (the Jetson, `.164`) — PC1 has no SSH — and reads PC1's DDS over the robot's
+internal bus, so it works the same on cable, WiFi or CURWB.
+
+| | Go2 | G1 |
+|---|---|---|
+| IDL | `unitree_go` | `unitree_hg` |
+| Topics | `rt/lf/lowstate`, `rt/lf/sportmodestate` | `rt/lf/lowstate`, `rt/lf/bmsstate` (both 20 Hz, measured) |
+| Joints | 12 | 29 (`left_hip_pitch` … `right_wrist_yaw`, SDK order) |
+| Motor temp | one sensor | **the hotter of two** |
+| Index | `go2-robot-data` | `g1-robot-data` |
+| Unit file | `systemd/robot-telemetry-agent.service` | `systemd/robot-telemetry-agent.g1.service`, installed under the same name |
+| Measured cost | 40 MB/day | ~66 MB/day at `PERIOD=3` (29 joints) |
+
+The G1 reader needs an SDK with the `unitree_hg` IDL; the one Unitree preinstalls on PC2
+(`~/unitree_sdk2-main`) does not have it. Clone upstream to `~/unitree_sdk2` as above.
+Field contract: `ROADMAP` §6.5.
 
 ## Events
 

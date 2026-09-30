@@ -1,3 +1,6 @@
+go2_telemetry_reader
+g1_telemetry_reader
+# pre-rename binary name, still on robots built before 2026-09-30
 telemetry_reader
 *.o
 __pycache__/

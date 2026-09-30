@@ -6,10 +6,18 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 
+# ROBOT_MODEL picks the reader; the rest of the chain is the same for both robots.
+ROBOT_MODEL="${ROBOT_MODEL:-go2}"
+case "$ROBOT_MODEL" in
+  go2) READER=./go2_telemetry_reader ;;
+  g1)  READER=./g1_telemetry_reader ;;
+  *)   echo "ROBOT_MODEL must be go2 or g1 (got '$ROBOT_MODEL')" >&2; exit 1 ;;
+esac
+
 export DDS_IFACE="${DDS_IFACE:-eth0}"          # the robot's internal bus
-export ROBOT_NAME="${ROBOT_NAME:-go2}"
+export ROBOT_NAME="${ROBOT_NAME:-$ROBOT_MODEL}"
 export PERIOD="${PERIOD:-3.0}"
-export HEC_INDEX="${HEC_INDEX:-go2-robot-data}"
+export HEC_INDEX="${HEC_INDEX:-$ROBOT_MODEL-robot-data}"
 export HEC_URL="${HEC_URL:?set HEC_URL}"
 export SPOOL_DIR="${SPOOL_DIR:-/var/tmp/robot-splunk-spool}"
 
@@ -23,4 +31,4 @@ if [ -z "${HEC_TOKEN:-}" ] && [ -r "$TOKEN_FILE" ]; then
 fi
 export HEC_TOKEN="${HEC_TOKEN:?set HEC_TOKEN or create $TOKEN_FILE}"
 
-exec ./telemetry_reader | python3 shipper/hec_shipper.py
+exec "$READER" | python3 shipper/hec_shipper.py

@@ -3,7 +3,7 @@
 hec_shipper — reads HEC event envelopes (one JSON per line) on stdin and posts them to
 Splunk in batches, with a disk spool so a dead link becomes a delay instead of a hole.
 
-Runs on the robot next to telemetry_reader:  telemetry_reader | hec_shipper.py
+Runs on the robot next to the reader:  {go2,g1}_telemetry_reader | hec_shipper.py
 
 Standard library only, so nothing has to be installed on the robot (Python 3.8 there).
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build telemetry_reader against the prebuilt Unitree SDK. No cmake, no ROS2.
+# Build the telemetry readers (go2_ and g1_) against the prebuilt Unitree SDK. No cmake, no ROS2.
 # Works unchanged on x86_64 (dev box) and aarch64 (the robot's Jetson) because the SDK
 # ships a static library for both.
 set -euo pipefail
@@ -18,6 +18,9 @@ INCS=(-I"$SDK/include" -I"$SDK/thirdparty/include" -I"$SDK/thirdparty/include/dd
 LIBS=("$SDK/lib/$ARCH/libunitree_sdk2.a" -L"$SDK/thirdparty/lib/$ARCH" -lddscxx -lddsc
       -Wl,-rpath,"$SDK/thirdparty/lib/$ARCH" -lpthread)
 
-# Telemetry: read-only, subscribes and nothing else.
-g++ -O2 -std=c++17 src/telemetry_reader.cpp -o telemetry_reader "${INCS[@]}" "${LIBS[@]}"
-echo "built ./telemetry_reader ($ARCH)"
+# Telemetry: read-only, subscribes and nothing else. One binary per robot model — the two
+# IDLs (unitree_go, unitree_hg) are different message types, not options of one reader.
+g++ -O2 -std=c++17 src/go2_telemetry_reader.cpp -o go2_telemetry_reader "${INCS[@]}" "${LIBS[@]}"
+echo "built ./go2_telemetry_reader ($ARCH, Go2)"
+g++ -O2 -std=c++17 src/g1_telemetry_reader.cpp -o g1_telemetry_reader "${INCS[@]}" "${LIBS[@]}"
+echo "built ./g1_telemetry_reader ($ARCH, G1)"
