@@ -24,3 +24,8 @@ g++ -O2 -std=c++17 src/go2_telemetry_reader.cpp -o go2_telemetry_reader "${INCS[
 echo "built ./go2_telemetry_reader ($ARCH, Go2)"
 g++ -O2 -std=c++17 src/g1_telemetry_reader.cpp -o g1_telemetry_reader "${INCS[@]}" "${LIBS[@]}"
 echo "built ./g1_telemetry_reader ($ARCH, G1)"
+
+# Flush to disk before returning. The robot is powered off by its switch, not shut down: on
+# 2026-10-01 a power-off right after a build left BOTH binaries at 0 bytes, and the service
+# then died on every start until systemd gave up (start-limit-hit).
+sync
