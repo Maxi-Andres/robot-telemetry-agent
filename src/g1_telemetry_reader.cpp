@@ -22,6 +22,7 @@
 
 #include <unitree/robot/channel/channel_subscriber.hpp>
 #include <unitree/idl/hg/BmsState_.hpp>
+#include <unitree/idl/hg/IMUState_.hpp>
 #include <unitree/idl/hg/LowState_.hpp>
 
 #include <algorithm>
@@ -34,6 +35,7 @@
 using namespace unitree::robot;
 using LowState = unitree_hg::msg::dds_::LowState_;
 using BmsState = unitree_hg::msg::dds_::BmsState_;
+using ImuState = unitree_hg::msg::dds_::IMUState_;
 
 // motor_state[0..28] in the SDK's G1 29-DoF order, names without "_joint". These are the
 // field prefixes the dashboard's motor panel expects; do not rename one without the other.
@@ -52,8 +54,9 @@ static const char* JOINT[NJOINT] = {
 static std::mutex g_mu;
 static LowState g_low;
 static BmsState g_bms;
-static bool g_have_low = false, g_have_bms = false;
-static std::atomic<long> g_n_low{0}, g_n_bms{0};
+static ImuState g_imu2;
+static bool g_have_low = false, g_have_bms = false, g_have_imu2 = false;
+static std::atomic<long> g_n_low{0}, g_n_bms{0}, g_n_imu2{0};
 static std::atomic<double> g_last_low{0};
 
 static double g_period, g_health_period, g_temp_warn, g_down_after;
@@ -79,7 +82,7 @@ static int motor_err_count(const LowState& m) {
 
 // ---------- event builders ----------
 
-static std::string build_vitals(const LowState& m, const BmsState* bms) {
+static std::string build_vitals(const LowState& m, const BmsState* bms, const ImuState* imu2) {
     const auto& imu = m.imu_state();
 
     // Unused sensor slots read 0, so a max over all twelve is the hottest real one.
@@ -116,6 +119,20 @@ static std::string build_vitals(const LowState& m, const BmsState* bms) {
     im.f("yaw", imu.rpy()[2], 4);
     im.i("temp", imu.temperature());
     o.raw("imu", "{" + im.s + "}");
+
+    // The G1 has TWO IMUs and the Unitree app shows both temperatures. `imu` above is the one
+    // inside LowState; this is rt/lf/secondary_imu (19.6 Hz). Which one is the body and which
+    // the crotch/pelvis the app talks about is NOT documented in the SDK headers and was not
+    // verified, so they are named by topic, not by body part. MEASURED 2026-10-01, standing:
+    // 79 and 81 °C — both IMUs run hot, the motors were at 40-49 °C the same minute.
+    if (imu2) {
+        Obj i2;
+        i2.f("roll", imu2->rpy()[0], 4);
+        i2.f("pitch", imu2->rpy()[1], 4);
+        i2.f("yaw", imu2->rpy()[2], 4);
+        i2.i("temp", imu2->temperature());
+        o.raw("imu_secondary", "{" + i2.s + "}");
+    }
 
     Obj tp;
     tp.i("motor_max", motor_temp_max(m));
@@ -197,6 +214,15 @@ int main() {
         g_last_low = now_s();
     }, 1);
 
+    ChannelSubscriberPtr<ImuState> sub_imu2(
+        new ChannelSubscriber<ImuState>("rt/lf/secondary_imu"));
+    sub_imu2->InitChannel([](const void* msg) {
+        std::lock_guard<std::mutex> lk(g_mu);
+        g_imu2 = *(const ImuState*)msg;
+        g_have_imu2 = true;
+        g_n_imu2++;
+    }, 1);
+
     ChannelSubscriberPtr<BmsState> sub_bms(new ChannelSubscriber<BmsState>("rt/lf/bmsstate"));
     sub_bms->InitChannel([](const void* msg) {
         std::lock_guard<std::mutex> lk(g_mu);
@@ -217,14 +243,15 @@ int main() {
             next_data = t + g_period;
             LowState low;
             BmsState bms;
-            bool hl, hb;
+            ImuState imu2;
+            bool hl, hb, hi;
             {
                 std::lock_guard<std::mutex> lk(g_mu);
-                low = g_low; bms = g_bms;
-                hl = g_have_low; hb = g_have_bms;
+                low = g_low; bms = g_bms; imu2 = g_imu2;
+                hl = g_have_low; hb = g_have_bms; hi = g_have_imu2;
             }
             if (hl) {
-                emit("robot:vitals", build_vitals(low, hb ? &bms : nullptr));
+                emit("robot:vitals", build_vitals(low, hb ? &bms : nullptr, hi ? &imu2 : nullptr));
                 emit("robot:motors", build_motors(low));
                 emit_changes(low);
             }
@@ -232,13 +259,15 @@ int main() {
 
         if (t >= next_health) {
             next_health = t + g_health_period;
-            const long nl = g_n_low.exchange(0), nb = g_n_bms.exchange(0);
+            const long nl = g_n_low.exchange(0), nb = g_n_bms.exchange(0),
+                       ni = g_n_imu2.exchange(0);
             const double age = t - g_last_low.load();
             const bool now_alive = (g_last_low.load() > 0) && (age < g_down_after);
 
             Obj hz;
             hz.f("lowstate", nl / g_health_period, 1);
             hz.f("bmsstate", nb / g_health_period, 1);
+            hz.f("secondary_imu", ni / g_health_period, 1);
             Obj o;
             o.raw("topic_hz", "{" + hz.s + "}");
             o.b("dds_alive", now_alive);
