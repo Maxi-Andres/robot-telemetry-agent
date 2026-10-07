@@ -20,8 +20,10 @@ Environment=DDS_IFACE=eth0
 Environment=PERIOD=3.0
 # GPS from the IR1101 (gps/go2_nmea_reader.py): its NMEA stream, accepted only from the router.
 # On the IR1101: lte gps nmea ip udp 192.168.123.1 192.168.123.18 10110
+# The router ignores that source address and sends from its Loopback0, 10.20.0.1 (measured
+# 2026-10-07: every datagram came from it with 192.168.123.1 configured), so that is the filter.
 Environment=NMEA_PORT=10110
-Environment=NMEA_SOURCE=192.168.123.1
+Environment=NMEA_SOURCE=10.20.0.1
 ExecStart=/home/unitree/robot-telemetry-agent/run.sh
 Restart=always
 RestartSec=5

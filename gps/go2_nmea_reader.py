@@ -26,7 +26,7 @@ import time
 
 PORT = int(os.environ.get("NMEA_PORT", "0") or 0)
 BIND = os.environ.get("NMEA_BIND", "0.0.0.0")  # noqa: S104  # filtered by NMEA_SOURCE below
-SOURCE = os.environ.get("NMEA_SOURCE", "192.168.123.1")
+SOURCE = os.environ.get("NMEA_SOURCE", "10.20.0.1")  # the IR1101 Loopback0, see the unit
 PERIOD = float(os.environ.get("GPS_PERIOD", "5"))
 STALE_S = float(os.environ.get("GPS_STALE_S", "30"))
 ROBOT = os.environ.get("ROBOT_NAME", "go2")
