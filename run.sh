@@ -31,4 +31,11 @@ if [ -z "${HEC_TOKEN:-}" ] && [ -r "$TOKEN_FILE" ]; then
 fi
 export HEC_TOKEN="${HEC_TOKEN:?set HEC_TOKEN or create $TOKEN_FILE}"
 
-exec "$READER" | python3 shipper/hec_shipper.py
+# GPS (the Go2 field kit's IR1101 streams NMEA over UDP): a second producer on the same pipe,
+# only when NMEA_PORT is set. It is a child of the reader's process (the exec keeps the PID),
+# and exits when that dies, so a dead DDS reader still ends the chain for systemd to restart.
+if [ "${NMEA_PORT:-0}" != 0 ]; then
+  ( python3 gps/go2_nmea_reader.py & exec "$READER" ) | python3 shipper/hec_shipper.py
+else
+  exec "$READER" | python3 shipper/hec_shipper.py
+fi

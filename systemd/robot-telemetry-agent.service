@@ -18,6 +18,10 @@ Environment=HEC_INDEX=go2-robot-data
 Environment=ROBOT_NAME=go2
 Environment=DDS_IFACE=eth0
 Environment=PERIOD=3.0
+# GPS from the IR1101 (gps/go2_nmea_reader.py): its NMEA stream, accepted only from the router.
+# On the IR1101: lte gps nmea ip udp 192.168.123.1 192.168.123.18 10110
+Environment=NMEA_PORT=10110
+Environment=NMEA_SOURCE=192.168.123.1
 ExecStart=/home/unitree/robot-telemetry-agent/run.sh
 Restart=always
 RestartSec=5

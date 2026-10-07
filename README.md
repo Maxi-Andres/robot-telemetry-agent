@@ -45,6 +45,9 @@ rt/lf/sport…   ─┘   curated fields, decimated        batch + disk spool
 - **`src/go2_telemetry_reader.cpp`** — native Unitree SDK, no ROS2. Subscribes to the `/lf/*`
   topics (20 Hz, same payload as the 500 Hz ones — 25x less traffic), decimates to one
   event set every `PERIOD`, emits one HEC envelope per line on stdout.
+- **`gps/go2_nmea_reader.py`** — Go2 field kit only: the IR1101's GNSS streams NMEA over UDP
+  to this Jetson; one `robot:gps` event per `GPS_PERIOD` (decimal lat/lon — NMEA is ddmm.mmmm).
+  Started by `run.sh` only when `NMEA_PORT` is set, on the same pipe to the shipper.
 - **`shipper/hec_shipper.py`** — stdlib only (the robot has Python 3.8). Batches, retries,
   spools to disk when the link is down, and enforces a daily byte cap.
 - **`poc/telemetry_poc.py`** — throwaway Python version that runs in the ROS2 devcontainer
